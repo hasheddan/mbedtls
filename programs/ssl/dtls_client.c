@@ -49,13 +49,13 @@ int main(void)
 #include "test/certs.h"
 
 /* Uncomment out the following line to default to IPv4 and disable IPv6 */
-//#define FORCE_IPV4
+#define FORCE_IPV4
 
-#define SERVER_PORT "4433"
-#define SERVER_NAME "localhost"
+#define SERVER_PORT "5684"
+#define SERVER_NAME "coap.golioth.io"
 
 #ifdef FORCE_IPV4
-#define SERVER_ADDR "127.0.0.1"     /* Forces IPv4 */
+#define SERVER_ADDR "34.135.90.112"     /* Forces IPv4 */
 #else
 #define SERVER_ADDR "::1"
 #endif
@@ -65,8 +65,23 @@ int main(void)
 #define READ_TIMEOUT_MS 1000
 #define MAX_RETRY       5
 
-#define DEBUG_LEVEL 0
+#define DEBUG_LEVEL 5
 
+// ca4d2a8ee64c9a739b082b3ea89c7671
+const unsigned char psk_out[] = {
+    0xca, 0x4d, 0x2a, 0x8e, 0xe6, 0x4c, 0x9a, 0x73,
+    0x9b, 0x08, 0x2b, 0x3e, 0xa8, 0x9c, 0x76, 0x71
+};
+const unsigned char psk_old[] = {
+    0x71, 0x76, 0x9c, 0xa8, 0x3e, 0x2b, 0x08, 0x9b,
+    0x73, 0x9a, 0x4c, 0xe6, 0x8e, 0x2a, 0x4d, 0xca
+};
+
+const unsigned char psk[] = {
+	99, 97, 52, 100, 50, 97, 56, 101, 101, 54, 52, 99, 57, 97, 55, 51, 57, 98, 48, 56, 50, 98, 51, 101, 97, 56, 57, 99, 55, 54, 55, 49
+};
+
+const char psk_id[] = "20230614151602-linux@blush-unexpected-fox";
 
 static void my_debug(void *ctx, int level,
                      const char *file, int line,
@@ -180,9 +195,13 @@ int main(int argc, char *argv[])
     /* OPTIONAL is usually a bad choice for security, but makes interop easier
      * in this simplified example, in which the ca chain is hardcoded.
      * Production code should set a proper ca chain and use REQUIRED. */
-    mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
+    mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_NONE);
     mbedtls_ssl_conf_ca_chain(&conf, &cacert, NULL);
     mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
+    if (( ret = mbedtls_ssl_conf_psk(&conf, psk, sizeof(psk), (const uint8_t*)psk_id, sizeof(psk_id) - 1)) != 0) {
+        mbedtls_printf(" failed\n  ! mbedtls_ssl_set_cid returned %d\n\n", ret);
+        goto exit;
+    };
     mbedtls_ssl_conf_dbg(&conf, my_debug, stdout);
     mbedtls_ssl_conf_read_timeout(&conf, READ_TIMEOUT_MS);
 
@@ -201,6 +220,11 @@ int main(int argc, char *argv[])
 
     mbedtls_ssl_set_timer_cb(&ssl, &timer, mbedtls_timing_set_delay,
                              mbedtls_timing_get_delay);
+
+    if ((ret = mbedtls_ssl_set_cid(&ssl, MBEDTLS_SSL_CID_ENABLED, NULL, 0)) != 0) {
+        mbedtls_printf(" failed\n  ! mbedtls_ssl_set_cid returned %d\n\n", ret);
+        goto exit;
+    }
 
     mbedtls_printf(" ok\n");
 
